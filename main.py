@@ -1,5 +1,7 @@
 def main() -> None:
-    print("Hello from cortex!")
+    from .cli import main as cli_main
+
+    cli_main()
 
 
 if __name__ == "__main__":

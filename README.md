@@ -1,3 +1,13 @@
+## Cortex (MVP)
+
+Minimal ingestion pipeline wired per `tech_doc.txt`.
+
+### Quickstart
+
+```bash
+python -m cortex.cli ingest --user u1 --role user --message "I prefer morning meetings and avoid Friday"
+```
+
 # 🧠 OmniMem — Unified Memory Layer for LLM-Powered Apps
 
 OmniMem is an **opinionated, developer-friendly Python library** for **automatic memory management** in LLM-based applications.  
