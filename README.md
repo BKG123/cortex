@@ -22,7 +22,7 @@ pip install cortex-memory
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/cortex.git
+git clone https://github.com/BKG123/cortex.git
 cd cortex
 
 # Create virtual environment
