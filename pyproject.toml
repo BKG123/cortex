@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Bejay Ketan Guin", email = "bejay.ketan1@gmail.com"}
 ]
 keywords = ["memory", "conversation", "vector-search", "embeddings", "local-first"]
 classifiers = [
@@ -28,10 +28,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/cortex"
-Repository = "https://github.com/yourusername/cortex"
-Documentation = "https://github.com/yourusername/cortex#readme"
-"Bug Tracker" = "https://github.com/yourusername/cortex/issues"
+Homepage = "https://github.com/BKG123/cortex"
+Repository = "https://github.com/BKG123/cortex"
+Documentation = "https://github.com/BKG123/cortex#readme"
+"Bug Tracker" = "https://github.com/BKG123/cortex/issues"
 
 [project.scripts]
 cortex = "memory.cli:main"
