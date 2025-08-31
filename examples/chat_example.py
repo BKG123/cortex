@@ -38,13 +38,16 @@ class EnhancedChatBot:
         # Initialize OpenAI client
         try:
             import openai
+
             self.client = openai.OpenAI(api_key=self.api_key)
         except ImportError:
             raise ImportError(
                 "OpenAI library required. Install with: pip install openai"
             )
 
-    def get_ai_response(self, user_message: str, context: str = "", memory_context: str = "") -> str:
+    def get_ai_response(
+        self, user_message: str, context: str = "", memory_context: str = ""
+    ) -> str:
         """Get response from OpenAI with enhanced context including memory."""
         try:
             # Build comprehensive system message
@@ -53,13 +56,13 @@ class EnhancedChatBot:
                 "Use the provided context to give personalized and contextual responses. "
                 "If the user asks about previous conversations or topics, reference the memory context.\n\n"
             )
-            
+
             if memory_context:
                 system_message += f"Memory Context (from previous conversations):\n{memory_context}\n\n"
-            
+
             if context:
                 system_message += f"Current Conversation Context:\n{context}\n\n"
-            
+
             system_message += (
                 "Instructions:\n"
                 "- Be conversational and remember previous interactions\n"
@@ -83,7 +86,9 @@ class EnhancedChatBot:
         except Exception as e:
             return f"Sorry, I encountered an error: {str(e)}"
 
-    def add_message(self, content: str, role: str = "user", metadata: Optional[dict] = None) -> str:
+    def add_message(
+        self, content: str, role: str = "user", metadata: Optional[dict] = None
+    ) -> str:
         """Add a message to memory with optional metadata."""
         message = Message(
             user_id=self.user_id,
@@ -116,15 +121,17 @@ class EnhancedChatBot:
         """Get relevant memory context from previous conversations."""
         # Search for semantically similar messages from previous conversations
         similar_messages = self.memory.search_similar(self.user_id, query, limit=limit)
-        
+
         if not similar_messages:
             return ""
-        
+
         context_lines = ["Relevant memories from previous conversations:"]
         for msg, score in similar_messages:
-            if msg.conversation_id != self.conversation_id:  # Only from other conversations
+            if (
+                msg.conversation_id != self.conversation_id
+            ):  # Only from other conversations
                 context_lines.append(f"- [{score:.2f}] {msg.role}: {msg.content}")
-        
+
         return "\n".join(context_lines)
 
     def search_similar(self, query: str, limit: int = 5) -> List[Tuple[Message, float]]:
@@ -143,14 +150,15 @@ class EnhancedChatBot:
         """Get conversation history from the last N days."""
         cutoff_date = datetime.utcnow() - timedelta(days=days)
         cutoff_str = cutoff_date.isoformat()
-        
+
         # Get all messages from the last N days
         messages = self.memory.get_conversation(self.user_id, limit=1000)
         recent_messages = [
-            msg for msg in messages 
+            msg
+            for msg in messages
             if datetime.fromisoformat(msg.timestamp) > cutoff_date
         ]
-        
+
         return recent_messages
 
     def chat(self, user_input: str) -> str:
@@ -176,22 +184,37 @@ class EnhancedChatBot:
         """Demonstrate memory persistence across sessions."""
         print("\n💾 Memory Persistence Demo")
         print("=" * 40)
-        
+
         # Add some sample conversations to demonstrate memory
         sample_conversations = [
-            ("What's your favorite programming language?", "I don't have personal preferences, but I can help you with many programming languages like Python, JavaScript, Java, and more."),
-            ("Tell me about machine learning", "Machine learning is a subset of AI where algorithms learn patterns from data to make predictions or decisions without explicit programming."),
-            ("What's the weather like?", "I don't have access to real-time weather data, but I can help you find weather information or explain weather-related concepts."),
-            ("Remember my name is Alice", "Nice to meet you, Alice! I'll remember that for our future conversations."),
-            ("What did we talk about earlier?", "We discussed programming languages, machine learning, weather, and I learned your name is Alice."),
+            (
+                "What's your favorite programming language?",
+                "I don't have personal preferences, but I can help you with many programming languages like Python, JavaScript, Java, and more.",
+            ),
+            (
+                "Tell me about machine learning",
+                "Machine learning is a subset of AI where algorithms learn patterns from data to make predictions or decisions without explicit programming.",
+            ),
+            (
+                "What's the weather like?",
+                "I don't have access to real-time weather data, but I can help you find weather information or explain weather-related concepts.",
+            ),
+            (
+                "Remember my name is Alice",
+                "Nice to meet you, Alice! I'll remember that for our future conversations.",
+            ),
+            (
+                "What did we talk about earlier?",
+                "We discussed programming languages, machine learning, weather, and I learned your name is Alice.",
+            ),
         ]
-        
+
         print("📝 Adding sample conversations to memory...")
         for user_msg, ai_msg in sample_conversations:
             self.add_message(user_msg, "user")
             self.add_message(ai_msg, "assistant")
             print(f"  Added: {user_msg[:50]}...")
-        
+
         print("✅ Sample conversations added to memory!")
 
     def close(self):
@@ -218,17 +241,17 @@ def main():
         chatbot = EnhancedChatBot(user_id)
 
         print("✅ Enhanced chatbot initialized successfully!")
-        
+
         # Demonstrate memory persistence
         chatbot.demonstrate_memory_persistence()
-        
+
         # Show user stats
         stats = chatbot.get_user_stats()
         print(f"\n📊 Current User Stats:")
         print(f"   Total messages: {stats['total_messages']}")
         print(f"   Messages by role: {stats['messages_by_role']}")
         print(f"   Conversations: {stats['conversations_count']}")
-        
+
         print("\n📚 Available commands:")
         print("   'quit' - Exit the chat")
         print("   'search <query>' - Search memory semantically")
