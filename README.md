@@ -1,42 +1,40 @@
-# 🧠 Cortex — Conversation Memory System
+# Cortex
 
-Cortex is a **local-first conversation memory system** that ingests and stores all conversation messages with vector embeddings for semantic search. Built with SQLite and FAISS for full local operation.
+A **local-first conversation memory system** that ingests and stores conversation messages with vector embeddings for semantic search. Built with SQLite and FAISS for complete local operation.
 
----
+## Features
 
-## ✨ Core Features
+- **Local-First Storage** — All data stored locally using SQLite + FAISS
+- **Semantic Search** — Vector similarity search using sentence transformers
+- **Multi-User Support** — Organize conversations by user ID
+- **Rich Metadata** — Support for conversation grouping, roles, and custom metadata
+- **Simple API** — Clean Python interface with CLI tools
 
-1. **Local-First Storage** — All data stored locally using SQLite + FAISS
-2. **Vector Search** — Semantic similarity search using sentence transformers
-3. **User-Based Organization** — All conversations organized by user_id
-4. **Rich Metadata** — Support for conversation grouping, roles, and custom metadata
-5. **Simple API** — Easy-to-use Python interface and CLI tools
-
----
-
-## 🚀 Quick Start
-
-### Installation
+## Installation
 
 ```bash
-# Create and activate virtual environment
+# Clone the repository
+git clone https://github.com/yourusername/cortex.git
+cd cortex
+
+# Create virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Install dependencies
+# Install
 pip install -e .
-
-# The system will automatically download the sentence transformer model on first use
 ```
 
-### Basic Usage
+The sentence transformer model will be automatically downloaded on first use.
+
+## Quick Start
 
 ```python
 from memory.conversation import ConversationMemory, Message
 from datetime import datetime
 import uuid
 
-# Initialize conversation memory
+# Initialize
 memory = ConversationMemory()
 
 # Add a message
@@ -48,249 +46,136 @@ message = Message(
     timestamp=datetime.utcnow().isoformat()
 )
 
-message_id = memory.add_message(message)
-print(f"Added message: {message_id}")
+memory.add_message(message)
 
 # Search for similar messages
-similar_results = memory.search_similar("user123", "artificial intelligence", limit=5)
-for msg, score in similar_results:
-    print(f"[Score: {score:.3f}] {msg.content}")
+results = memory.search_similar("user123", "artificial intelligence", limit=5)
+for msg, score in results:
+    print(f"[{score:.3f}] {msg.content}")
 
 memory.close()
 ```
 
-### CLI Usage
+## CLI Usage
 
 ```bash
-# Add a single message
+# Add a message
 python cli.py add user123 "Hello, how are you?" --role user
 
-# Add a conversation from JSON file
+# Import conversation from JSON
 python cli.py add-conversation user123 sample_conversation.json
 
-# Get conversation messages
+# Retrieve messages
 python cli.py get user123 --limit 10
 
-# Search for similar messages
+# Semantic search
 python cli.py search-similar user123 "machine learning" --limit 5
 
-# Search by content
+# Content search
 python cli.py search-content user123 "AI" --limit 10
 
-# Get user statistics
+# View statistics
 python cli.py stats user123
 ```
 
----
+## API Reference
 
-## 📁 Project Structure
+### ConversationMemory
 
-```
-cortex/
-├── __init__.py                 # Root package init
-├── cli.py                     # Command-line interface
-├── demo.py                    # Demo script
-├── example_conversation.py    # Example script
-├── sample_conversation.json   # Sample conversation data
-├── pyproject.toml            # Dependencies & configuration
-├── README.md                 # This documentation
-├── .gitignore               # Git ignore rules
-├── LICENSE                  # MIT License
-└── memory/
-    ├── __init__.py          # Memory package init
-    ├── conversation.py      # Main conversation memory system
-    └── store.py            # SQLite storage wrapper
-```
-
----
-
-## 🔧 Configuration
-
-### Database and Vector Storage
+Main interface for conversation storage and retrieval.
 
 ```python
-# Custom database path and vector directory
 memory = ConversationMemory(
-    db_path="my_conversations.db",
-    vector_dir="my_vectors"
+    db_path="cortex.db",      # SQLite database path
+    vector_dir="vectors"      # FAISS index directory
 )
 ```
 
-### Embedding Model
-
-The system uses `all-MiniLM-L6-v2` by default (384-dimensional embeddings). The model is automatically downloaded on first use.
-
----
-
-## 📊 Data Model
-
-### Message Structure
+### Message Model
 
 ```python
 @dataclass
 class Message:
     user_id: str                    # User identifier
     message_id: str                 # Unique message ID
-    content: str                    # Message text
-    role: str                       # Role (user, assistant, system, etc.)
+    content: str                    # Message content
+    role: str                       # Message role (user, assistant, system)
     timestamp: str                  # ISO-8601 timestamp
     conversation_id: Optional[str]  # Optional conversation grouping
     metadata_json: Optional[str]    # JSON string for custom metadata
 ```
 
-### Storage
-
-- **SQLite**: Stores message metadata, content, and relationships
-- **FAISS**: Stores vector embeddings for semantic search
-- **Local Files**: Vector indices and message ID mappings
-
----
-
-## 🔍 Search Capabilities
-
-### Vector Similarity Search
+### Core Methods
 
 ```python
-# Find messages semantically similar to query
-results = memory.search_similar("user123", "neural networks", limit=10)
-for message, similarity_score in results:
-    print(f"Score: {similarity_score:.3f} - {message.content}")
-```
-
-### Content Search
-
-```python
-# Find messages containing specific text
-results = memory.search_by_content("user123", "machine learning", limit=50)
-for message in results:
-    print(f"{message.role}: {message.content}")
-```
-
-### Conversation Retrieval
-
-```python
-# Get all messages for a user
-messages = memory.get_conversation("user123", limit=100)
-
-# Get messages from a specific conversation
-messages = memory.get_conversation("user123", conversation_id="conv_123", limit=50)
-```
-
----
-
-## 📈 Statistics and Analytics
-
-```python
-# Get comprehensive user statistics
-stats = memory.get_user_stats("user123")
-print(f"Total messages: {stats['total_messages']}")
-print(f"Messages by role: {stats['messages_by_role']}")
-print(f"Conversations: {stats['conversations_count']}")
-print(f"First message: {stats['first_message']}")
-print(f"Last message: {stats['last_message']}")
-```
-
----
-
-## 🧪 Testing and Examples
-
-### Run the Demo
-
-```bash
-python demo.py
-```
-
-This demonstrates:
-- Adding conversation messages
-- Vector similarity search
-- Content-based search
-- User statistics
-
-### Run the Full Example
-
-```bash
-python example_conversation.py
-```
-
-This shows:
-- Multiple conversation scenarios
-- Cross-conversation search
-- Advanced usage patterns
-
-### Test with Sample Data
-
-```bash
-# Add the sample conversation
-python cli.py add-conversation user456 sample_conversation.json
-
-# Search for similar content
-python cli.py search-similar user456 "recommendation systems" --limit 3
-
-# Get statistics
-python cli.py stats user456
-```
-
----
-
-## 🔄 Data Management
-
-### Adding Messages
-
-```python
-# Single message
+# Add messages
 memory.add_message(message)
+memory.add_messages([message1, message2])
 
-# Multiple messages (more efficient)
-memory.add_messages([message1, message2, message3])
+# Search
+memory.search_similar(user_id, query, limit=10)
+memory.search_by_content(user_id, query, limit=50)
+
+# Retrieve
+memory.get_conversation(user_id, limit=100)
+memory.get_conversation(user_id, conversation_id="conv_123")
+
+# Analytics
+memory.get_user_stats(user_id)
+
+# Management
+memory.delete_user_messages(user_id)
 ```
 
-### Deleting Data
+## Storage
 
-```python
-# Delete all messages for a user
-deleted_count = memory.delete_user_messages("user123")
-print(f"Deleted {deleted_count} messages")
-```
+- **SQLite**: Message metadata and relationships
+- **FAISS**: Vector embeddings for semantic search
+- **Sentence Transformers**: `all-MiniLM-L6-v2` model (384-dimensional embeddings)
 
-### Data Persistence
+All data is stored locally with no external dependencies or cloud services.
 
-- SQLite database: `cortex.db` (default)
-- Vector storage: `vectors/` directory
-- All data persists between sessions
+## Examples
 
----
-
-## 🛠️ Development
-
-### Dependencies
-
-- `faiss-cpu>=1.7.4` - Vector similarity search
-- `sentence-transformers>=2.2.2` - Text embeddings
-- `numpy>=1.24.0` - Numerical operations
-- `sqlite3` - Built into Python
-
-### Local Development
+See the included examples:
 
 ```bash
-# Install in development mode
-pip install -e .
-
-# Run tests
+# Basic demonstration
 python demo.py
+
+# Comprehensive example
 python example_conversation.py
 
-# Use CLI
-python cli.py --help
+# Sample data
+python cli.py add-conversation user456 sample_conversation.json
+python cli.py search-similar user456 "recommendation systems"
 ```
 
----
+## Project Structure
 
-## 📝 License
+```
+cortex/
+├── memory/
+│   ├── conversation.py    # Main conversation memory system
+│   └── store.py          # SQLite storage layer
+├── cli.py                # Command-line interface
+├── demo.py              # Basic demonstration
+├── example_conversation.py # Comprehensive example
+├── sample_conversation.json # Sample data
+└── pyproject.toml       # Project configuration
+```
 
-MIT License - see LICENSE file for details.
+## Requirements
 
----
+- Python 3.8+
+- faiss-cpu>=1.7.4
+- sentence-transformers>=2.2.2
+- numpy>=1.24.0
 
-## 🤝 Contributing
+## Contributing
 
-This is Phase 1 of the Cortex conversation memory system. The repository has been cleaned to focus solely on conversation ingestion with local vector storage.
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
