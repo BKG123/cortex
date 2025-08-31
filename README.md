@@ -145,18 +145,59 @@ All data is stored locally with no external dependencies or cloud services.
 
 ## Examples
 
-See the included examples:
+See the included examples in the `examples/` folder:
 
 ```bash
 # Basic demonstration
-python demo.py
+python examples/demo.py
 
 # Comprehensive example
-python example_conversation.py
+python examples/example_conversation.py
+
+# Chat with OpenAI (requires API key)
+export OPENAI_API_KEY="your-api-key-here"
+python examples/chat_example.py
+
 
 # Sample data
-python cli.py add-conversation user456 sample_conversation.json
-python cli.py search-similar user456 "recommendation systems"
+cortex add-conversation user456 examples/sample_conversation.json
+cortex search-similar user456 "recommendation systems"
+```
+
+### Chat Example with OpenAI
+
+The `examples/chat_example.py` demonstrates a complete chat interface using OpenAI and Cortex memory:
+
+```python
+from examples.chat_example import ChatBot
+
+# Initialize chatbot
+chatbot = ChatBot("user123")
+
+# Chat with memory
+response = chatbot.chat("Hello! What did we talk about yesterday?")
+print(response)
+
+# Search memory
+results = chatbot.search_similar("machine learning")
+for msg, score in results:
+    print(f"[{score:.3f}] {msg.content}")
+
+chatbot.close()
+```
+
+**Features:**
+- 🤖 Interactive chat with OpenAI GPT-3.5-turbo
+- 🧠 Automatic conversation memory storage
+- 🔍 Semantic search through conversation history
+- 📝 Context-aware responses using recent conversation
+- 💬 Commands: `context`, `search <query>`, `quit`
+
+**Installation:**
+```bash
+pip install cortex-memory[chat]
+# or
+pip install cortex-memory openai
 ```
 
 ## Project Structure
@@ -165,12 +206,16 @@ python cli.py search-similar user456 "recommendation systems"
 cortex/
 ├── memory/
 │   ├── conversation.py    # Main conversation memory system
-│   └── store.py          # SQLite storage layer
-├── cli.py                # Command-line interface
-├── demo.py              # Basic demonstration
-├── example_conversation.py # Comprehensive example
-├── sample_conversation.json # Sample data
-└── pyproject.toml       # Project configuration
+│   ├── store.py          # SQLite storage layer
+│   └── cli.py            # Command-line interface
+├── examples/
+│   ├── demo.py           # Basic demonstration
+│   ├── example_conversation.py # Comprehensive example
+│   ├── chat_example.py   # OpenAI integration example
+│   ├── test_chat_example.py # Test script for chat
+│   └── sample_conversation.json # Sample data
+├── pyproject.toml        # Project configuration
+└── README.md            # Documentation
 ```
 
 ## Requirements
