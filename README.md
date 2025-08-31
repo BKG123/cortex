@@ -12,6 +12,14 @@ A **local-first conversation memory system** that ingests and stores conversatio
 
 ## Installation
 
+### From PyPI (Recommended)
+
+```bash
+pip install cortex-memory
+```
+
+### From Source
+
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/cortex.git
@@ -60,22 +68,22 @@ memory.close()
 
 ```bash
 # Add a message
-python cli.py add user123 "Hello, how are you?" --role user
+cortex add user123 "Hello, how are you?" --role user
 
 # Import conversation from JSON
-python cli.py add-conversation user123 sample_conversation.json
+cortex add-conversation user123 sample_conversation.json
 
 # Retrieve messages
-python cli.py get user123 --limit 10
+cortex get user123 --limit 10
 
 # Semantic search
-python cli.py search-similar user123 "machine learning" --limit 5
+cortex search-similar user123 "machine learning" --limit 5
 
 # Content search
-python cli.py search-content user123 "AI" --limit 10
+cortex search-content user123 "AI" --limit 10
 
 # View statistics
-python cli.py stats user123
+cortex stats user123
 ```
 
 ## API Reference
