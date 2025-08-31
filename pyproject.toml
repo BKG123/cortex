@@ -24,12 +24,15 @@ classifiers = [
 dependencies = [
     "faiss-cpu>=1.7.4",
     "sentence-transformers>=2.2.2",
-    "numpy>=1.24.0"
+    "numpy>=1.24.0",
+    "python-dotenv>=1.1.1",
+    "openai>=1.102.0",
 ]
 
 [project.optional-dependencies]
 chat = [
-    "openai>=1.0.0"
+    "openai>=1.0.0",
+    "python-dotenv>=1.1.1"
 ]
 
 [project.urls]
