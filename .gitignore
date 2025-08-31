@@ -11,3 +11,8 @@
 .env.development.local
 .env.test.local
 __pycache__/
+
+# Cortex generated files
+cortex.db
+vectors/
+*.egg-info/

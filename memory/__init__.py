@@ -1,8 +1,8 @@
-from .episodic import EpisodicMemory, Episode
+from .conversation import ConversationMemory, Message
 from .store import SQLiteStore
 
 __all__ = [
-    "EpisodicMemory",
-    "Episode",
+    "ConversationMemory",
+    "Message",
     "SQLiteStore",
 ]
