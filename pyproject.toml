@@ -34,6 +34,9 @@ chat = [
     "openai>=1.0.0",
     "python-dotenv>=1.1.1"
 ]
+pinecone = [
+    "pinecone-client>=2.2.0"
+]
 
 [project.urls]
 Homepage = "https://github.com/BKG123/cortex"

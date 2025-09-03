@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import json
-import pickle
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 import numpy as np
-import faiss
 from sentence_transformers import SentenceTransformer
 
 from .store import SQLiteStore
+from .vectors import create_vector_store, BaseVectorStore
 
 
 @dataclass(frozen=True)
@@ -38,27 +37,29 @@ class Message:
 class ConversationMemory:
     """Manages storage and retrieval of conversation messages with vector embeddings.
 
-    Uses SQLite for metadata storage and FAISS for vector similarity search.
-    All data is stored locally.
+    Uses SQLite for metadata storage and configurable vector backends for similarity search.
+    Supports local FAISS (default) and cloud vector databases like Pinecone.
     """
 
-    def __init__(self, db_path: str = "cortex.db", vector_dir: str = "vectors") -> None:
+    def __init__(
+        self,
+        db_path: str = "cortex.db",
+        vector_dir: str = "vectors",
+        vector_backend: str = "faiss",
+        **vector_kwargs,
+    ) -> None:
         self.store = SQLiteStore(db_path)
-        self.vector_dir = Path(vector_dir)
-        self.vector_dir.mkdir(exist_ok=True)
 
         # Initialize sentence transformer for embeddings
         self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         self.embedding_dim = 384  # Dimension for all-MiniLM-L6-v2
 
-        # FAISS index for vector search
-        self.index = faiss.IndexFlatIP(
-            self.embedding_dim
-        )  # Inner product for cosine similarity
-        self.message_ids: List[str] = []  # Maps FAISS index to message_id
+        # Initialize vector store backend
+        if vector_backend == "faiss":
+            vector_kwargs.setdefault("vector_dir", vector_dir)
+        self.vector_store = create_vector_store(vector_backend, **vector_kwargs)
 
         self._ensure_schema()
-        self._load_existing_vectors()
 
     def _ensure_schema(self) -> None:
         """Create the database schema for storing conversation messages."""
@@ -100,39 +101,6 @@ class ConversationMemory:
             """
         )
 
-    def _load_existing_vectors(self) -> None:
-        """Load existing vectors from disk and rebuild FAISS index."""
-        vector_file = self.vector_dir / "faiss_index.bin"
-        ids_file = self.vector_dir / "message_ids.pkl"
-
-        if vector_file.exists() and ids_file.exists():
-            try:
-                # Load FAISS index
-                self.index = faiss.read_index(str(vector_file))
-
-                # Load message IDs mapping
-                with open(ids_file, "rb") as f:
-                    self.message_ids = pickle.load(f)
-
-                print(f"Loaded {len(self.message_ids)} existing vectors")
-            except Exception as e:
-                print(f"Error loading existing vectors: {e}")
-                # Reset to empty index
-                self.index = faiss.IndexFlatIP(self.embedding_dim)
-                self.message_ids = []
-
-    def _save_vectors(self) -> None:
-        """Save FAISS index and message IDs to disk."""
-        try:
-            # Save FAISS index
-            faiss.write_index(self.index, str(self.vector_dir / "faiss_index.bin"))
-
-            # Save message IDs mapping
-            with open(self.vector_dir / "message_ids.pkl", "wb") as f:
-                pickle.dump(self.message_ids, f)
-        except Exception as e:
-            print(f"Error saving vectors: {e}")
-
     def _get_embedding(self, text: str) -> np.ndarray:
         """Generate embedding for text using sentence transformer."""
         embedding = self.embedding_model.encode([text], convert_to_tensor=False)
@@ -143,9 +111,10 @@ class ConversationMemory:
         # Generate embedding
         embedding = self._get_embedding(message.content)
 
-        # Add to FAISS index
-        self.index.add(embedding)
-        self.message_ids.append(message.message_id)
+        # Add to vector store
+        self.vector_store.add_vectors(
+            vectors=embedding.reshape(1, -1), ids=[message.message_id]
+        )
 
         # Save embedding path (for future reference)
         embedding_path = f"embeddings/{message.message_id}.npy"
@@ -169,9 +138,6 @@ class ConversationMemory:
             ],
         )
 
-        # Save vectors to disk
-        self._save_vectors()
-
         return message.message_id
 
     def add_messages(self, messages: List[Message]) -> List[str]:
@@ -184,12 +150,9 @@ class ConversationMemory:
         embeddings = self.embedding_model.encode(contents, convert_to_tensor=False)
         embeddings = embeddings.astype(np.float32)
 
-        # Add to FAISS index
-        self.index.add(embeddings)
-
-        # Add message IDs to mapping
+        # Add to vector store
         message_ids = [msg.message_id for msg in messages]
-        self.message_ids.extend(message_ids)
+        self.vector_store.add_vectors(vectors=embeddings, ids=message_ids)
 
         # Prepare data for SQLite
         params = [
@@ -216,21 +179,59 @@ class ConversationMemory:
             params,
         )
 
-        # Save vectors to disk
-        self._save_vectors()
-
         return message_ids
 
+    def search_similar(
+        self, user_id: str, query: str, limit: int = 10
+    ) -> List[Tuple[Message, float]]:
+        """Search for messages similar to the query using vector similarity."""
+        # Generate query embedding
+        query_embedding = self._get_embedding(query)
+
+        # Search vector store
+        similar_ids = self.vector_store.search_similar(
+            query_vector=query_embedding, k=limit
+        )
+
+        # Retrieve messages from SQLite
+        results = []
+        for message_id, score in similar_ids:
+            message = self._get_message_by_id(message_id)
+            if message and message.user_id == user_id:
+                results.append((message, score))
+
+        # Sort by score (higher is better for cosine similarity)
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results[:limit]
+
+    def search_by_content(
+        self, user_id: str, query: str, limit: int = 50
+    ) -> List[Message]:
+        """Search for messages containing specific text content."""
+        results = self.store.query_all(
+            """
+            SELECT user_id, message_id, content, role, timestamp, 
+                   conversation_id, metadata_json
+            FROM messages 
+            WHERE user_id = ? AND content LIKE ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+            """,
+            [user_id, f"%{query}%", limit],
+        )
+
+        return [self._row_to_message(row) for row in results]
+
     def get_conversation(
-        self, user_id: str, conversation_id: Optional[str] = None, limit: int = 100
+        self, user_id: str, limit: int = 100, conversation_id: Optional[str] = None
     ) -> List[Message]:
         """Retrieve conversation messages for a user."""
         if conversation_id:
-            rows = self.store.query_all(
+            results = self.store.query_all(
                 """
                 SELECT user_id, message_id, content, role, timestamp, 
                        conversation_id, metadata_json
-                FROM messages
+                FROM messages 
                 WHERE user_id = ? AND conversation_id = ?
                 ORDER BY timestamp ASC
                 LIMIT ?
@@ -238,11 +239,11 @@ class ConversationMemory:
                 [user_id, conversation_id, limit],
             )
         else:
-            rows = self.store.query_all(
+            results = self.store.query_all(
                 """
                 SELECT user_id, message_id, content, role, timestamp, 
                        conversation_id, metadata_json
-                FROM messages
+                FROM messages 
                 WHERE user_id = ?
                 ORDER BY timestamp DESC
                 LIMIT ?
@@ -250,163 +251,100 @@ class ConversationMemory:
                 [user_id, limit],
             )
 
-        return [Message(**dict(row)) for row in rows]
-
-    def search_similar(
-        self, user_id: str, query: str, limit: int = 10
-    ) -> List[Tuple[Message, float]]:
-        """Search for messages similar to the query using vector similarity."""
-        # Generate embedding for query
-        query_embedding = self._get_embedding(query)
-
-        # Search in FAISS index
-        scores, indices = self.index.search(
-            query_embedding, min(limit * 2, len(self.message_ids))
-        )
-
-        # Get messages for the found indices
-        results = []
-        for score, idx in zip(scores[0], indices[0]):
-            if idx < len(self.message_ids):
-                message_id = self.message_ids[idx]
-
-                # Get message from database
-                row = self.store.query_one(
-                    """
-                    SELECT user_id, message_id, content, role, timestamp, 
-                           conversation_id, metadata_json
-                    FROM messages
-                    WHERE message_id = ? AND user_id = ?
-                    """,
-                    [message_id, user_id],
-                )
-
-                if row:
-                    message = Message(**dict(row))
-                    results.append((message, float(score)))
-
-                    if len(results) >= limit:
-                        break
-
-        return results
-
-    def search_by_content(
-        self, user_id: str, query: str, limit: int = 50
-    ) -> List[Message]:
-        """Search messages by content using text search."""
-        pattern = f"%{query}%"
-        rows = self.store.query_all(
-            """
-            SELECT user_id, message_id, content, role, timestamp, 
-                   conversation_id, metadata_json
-            FROM messages
-            WHERE user_id = ? AND content LIKE ?
-            ORDER BY timestamp DESC
-            LIMIT ?
-            """,
-            [user_id, pattern, limit],
-        )
-        return [Message(**dict(row)) for row in rows]
+        return [self._row_to_message(row) for row in results]
 
     def get_user_stats(self, user_id: str) -> Dict[str, Any]:
-        """Get statistics for a user's conversations."""
-        # Total messages
-        total_row = self.store.query_one(
+        """Get statistics about a user's conversations."""
+        # Total message count
+        total_messages = self.store.query_one(
             "SELECT COUNT(*) as count FROM messages WHERE user_id = ?", [user_id]
         )
-        total_messages = total_row["count"] if total_row else 0
 
-        # Messages by role
-        role_rows = self.store.query_all(
+        # Message count by role
+        role_counts = self.store.query_all(
             """
-            SELECT role, COUNT(*) as count
-            FROM messages
-            WHERE user_id = ?
+            SELECT role, COUNT(*) as count 
+            FROM messages 
+            WHERE user_id = ? 
             GROUP BY role
             """,
             [user_id],
         )
-        messages_by_role = {row["role"]: row["count"] for row in role_rows}
 
-        # Conversations count
-        conv_row = self.store.query_one(
+        # Conversation count
+        conversation_count = self.store.query_one(
             """
-            SELECT COUNT(DISTINCT conversation_id) as count
-            FROM messages
+            SELECT COUNT(DISTINCT conversation_id) as count 
+            FROM messages 
             WHERE user_id = ? AND conversation_id IS NOT NULL
             """,
             [user_id],
         )
-        conversations_count = conv_row["count"] if conv_row else 0
 
-        # First and last message timestamps
-        first_row = self.store.query_one(
-            """
-            SELECT timestamp
-            FROM messages
-            WHERE user_id = ?
-            ORDER BY timestamp ASC
-            LIMIT 1
-            """,
-            [user_id],
-        )
-        last_row = self.store.query_one(
-            """
-            SELECT timestamp
-            FROM messages
-            WHERE user_id = ?
-            ORDER BY timestamp DESC
-            LIMIT 1
-            """,
-            [user_id],
-        )
+        # Vector store stats
+        vector_stats = self.vector_store.get_stats()
 
         return {
-            "total_messages": total_messages,
-            "messages_by_role": messages_by_role,
-            "conversations_count": conversations_count,
-            "first_message": first_row["timestamp"] if first_row else None,
-            "last_message": last_row["timestamp"] if last_row else None,
+            "user_id": user_id,
+            "total_messages": total_messages["count"] if total_messages else 0,
+            "role_counts": {row["role"]: row["count"] for row in role_counts},
+            "conversation_count": conversation_count["count"]
+            if conversation_count
+            else 0,
+            "vector_store": vector_stats,
         }
 
     def delete_user_messages(self, user_id: str) -> int:
         """Delete all messages for a user."""
-        # Get message IDs to remove from FAISS
-        rows = self.store.query_all(
+        # Get message IDs to delete from vector store
+        message_ids = self.store.query_all(
             "SELECT message_id FROM messages WHERE user_id = ?", [user_id]
         )
-        message_ids_to_remove = {row["message_id"] for row in rows}
 
-        # Remove from FAISS index (rebuild without these messages)
-        new_message_ids = []
-        new_embeddings = []
-
-        for i, msg_id in enumerate(self.message_ids):
-            if msg_id not in message_ids_to_remove:
-                new_message_ids.append(msg_id)
-                # Get embedding from index
-                embedding = self.index.reconstruct(i)
-                new_embeddings.append(embedding)
-
-        # Rebuild FAISS index
-        if new_embeddings:
-            self.index = faiss.IndexFlatIP(self.embedding_dim)
-            embeddings_array = np.array(new_embeddings, dtype=np.float32)
-            self.index.add(embeddings_array)
-        else:
-            self.index = faiss.IndexFlatIP(self.embedding_dim)
-
-        self.message_ids = new_message_ids
+        # Delete from vector store
+        for row in message_ids:
+            self.vector_store.delete_vector(row["message_id"])
 
         # Delete from SQLite
         cur = self.store.execute("DELETE FROM messages WHERE user_id = ?", [user_id])
 
-        # Save updated vectors
-        self._save_vectors()
+        return cur.rowcount
 
-        return int(cur.rowcount or 0)
+    def _get_message_by_id(self, message_id: str) -> Optional[Message]:
+        """Retrieve a message by its ID."""
+        row = self.store.query_one(
+            """
+            SELECT user_id, message_id, content, role, timestamp, 
+                   conversation_id, metadata_json
+            FROM messages 
+            WHERE message_id = ?
+            """,
+            [message_id],
+        )
+
+        return self._row_to_message(row) if row else None
+
+    def _row_to_message(self, row) -> Message:
+        """Convert a database row to a Message object."""
+        return Message(
+            user_id=row["user_id"],
+            message_id=row["message_id"],
+            content=row["content"],
+            role=row["role"],
+            timestamp=row["timestamp"],
+            conversation_id=row["conversation_id"],
+            metadata_json=row["metadata_json"],
+        )
 
     def close(self) -> None:
-        """Close the conversation memory and save vectors."""
-        self._save_vectors()
+        """Close the conversation memory and clean up resources."""
         self.store.close()
+        self.vector_store.close()
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.close()
