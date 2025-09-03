@@ -1,14 +1,16 @@
 # Cortex
 
-A **local-first conversation memory system** that ingests and stores conversation messages with vector embeddings for semantic search. Built with SQLite and FAISS for complete local operation.
+A **flexible conversation memory system** that ingests and stores conversation messages with vector embeddings for semantic search. Built with SQLite and **pluggable vector backends** - use local FAISS for development or cloud vector databases like Pinecone for production.
 
 ## Features
 
-- **Local-First Storage** — All data stored locally using SQLite + FAISS
+- **Flexible Storage** — Choose between local SQLite + FAISS or cloud vector databases
+- **Pluggable Backends** — Local FAISS (default), Pinecone, and more coming soon
 - **Semantic Search** — Vector similarity search using sentence transformers
 - **Multi-User Support** — Organize conversations by user ID
 - **Rich Metadata** — Support for conversation grouping, roles, and custom metadata
 - **Simple API** — Clean Python interface with CLI tools
+- **Zero Breaking Changes** — Existing code works unchanged
 
 ## Installation
 
@@ -35,14 +37,24 @@ pip install -e .
 
 The sentence transformer model will be automatically downloaded on first use.
 
+### Optional Dependencies
+
+For cloud vector databases like Pinecone:
+
+```bash
+pip install cortex-memory[pinecone]
+```
+
 ## Quick Start
+
+### Local FAISS (Default)
 
 ```python
 from memory.conversation import ConversationMemory, Message
 from datetime import datetime
 import uuid
 
-# Initialize
+# Initialize with local FAISS (default)
 memory = ConversationMemory()
 
 # Add a message
@@ -62,6 +74,24 @@ for msg, score in results:
     print(f"[{score:.3f}] {msg.content}")
 
 memory.close()
+```
+
+### Pinecone Cloud
+
+```python
+import os
+os.environ["PINECONE_API_KEY"] = "your-api-key"
+os.environ["PINECONE_ENVIRONMENT"] = "your-environment"
+
+memory = ConversationMemory(
+    vector_backend="pinecone",
+    index_name="cortex-vectors",
+    dimension=384
+)
+
+# Same API, different backend!
+memory.add_message(message)
+results = memory.search_similar("user123", "artificial intelligence", limit=5)
 ```
 
 ## CLI Usage
@@ -90,12 +120,29 @@ cortex stats user123
 
 ### ConversationMemory
 
-Main interface for conversation storage and retrieval.
+Main interface for conversation storage and retrieval with configurable vector backends.
 
 ```python
+# Local FAISS (default)
 memory = ConversationMemory(
     db_path="cortex.db",      # SQLite database path
     vector_dir="vectors"      # FAISS index directory
+)
+
+# Pinecone cloud
+memory = ConversationMemory(
+    vector_backend="pinecone",
+    index_name="cortex-vectors",
+    dimension=384,
+    metric="cosine"
+)
+
+# Custom FAISS settings
+memory = ConversationMemory(
+    vector_backend="faiss",
+    vector_dir="custom_vectors",
+    dimension=384,
+    metric="euclidean"
 )
 ```
 
@@ -135,13 +182,55 @@ memory.get_user_stats(user_id)
 memory.delete_user_messages(user_id)
 ```
 
+## Vector Backends
+
+Cortex supports multiple vector storage backends for different use cases:
+
+### Local FAISS (Default)
+- **Use Case**: Development, testing, small datasets, offline usage
+- **Features**: Fast, no external dependencies, full control
+- **Limitations**: No metadata filtering, limited scalability
+
+### Pinecone
+- **Use Case**: Production, large datasets, team collaboration
+- **Features**: Metadata filtering, automatic scaling, team access
+- **Requirements**: Pinecone API credentials
+
+### Backend Selection
+
+```python
+# Use local FAISS (default)
+memory = ConversationMemory()
+
+# Use Pinecone
+memory = ConversationMemory(
+    vector_backend="pinecone",
+    index_name="my-index"
+)
+
+# Mix and match
+local_memory = ConversationMemory(vector_backend="faiss")
+cloud_memory = ConversationMemory(vector_backend="pinecone")
+```
+
+### Environment Configuration
+
+```bash
+# For Pinecone
+export PINECONE_API_KEY="your-api-key-here"
+export PINECONE_ENVIRONMENT="your-environment-here"
+```
+
 ## Storage
 
-- **SQLite**: Message metadata and relationships
-- **FAISS**: Vector embeddings for semantic search
+- **SQLite**: Message metadata and relationships (local)
+- **Vector Backends**: Configurable vector storage
+  - **Local FAISS**: Vector embeddings stored locally (default)
+  - **Pinecone**: Cloud-hosted vector database
+  - **More coming soon**: Weaviate, Qdrant, Chroma
 - **Sentence Transformers**: `all-MiniLM-L6-v2` model (384-dimensional embeddings)
 
-All data is stored locally with no external dependencies or cloud services.
+Choose your storage strategy: local-only for development, cloud for production, or hybrid approaches.
 
 ## Examples
 
@@ -154,10 +243,13 @@ python examples/demo.py
 # Comprehensive example
 python examples/example_conversation.py
 
+# Vector backend examples
+python examples/pinecone_example.py      # Pinecone integration
+python examples/hybrid_example.py       # Backend comparison
+
 # Chat with OpenAI (requires API key)
 export OPENAI_API_KEY="your-api-key-here"
 python examples/chat_example.py
-
 
 # Sample data
 cortex add-conversation user456 examples/sample_conversation.json
@@ -207,13 +299,21 @@ cortex/
 ├── memory/
 │   ├── conversation.py    # Main conversation memory system
 │   ├── store.py          # SQLite storage layer
-│   └── cli.py            # Command-line interface
+│   ├── cli.py            # Command-line interface
+│   └── vectors/          # Vector store backends
+│       ├── __init__.py   # Factory functions
+│       ├── base.py       # Abstract interfaces
+│       ├── local_faiss.py # Local FAISS implementation
+│       └── pinecone_store.py # Pinecone integration
 ├── examples/
 │   ├── demo.py           # Basic demonstration
 │   ├── example_conversation.py # Comprehensive example
 │   ├── chat_example.py   # OpenAI integration example
-│   ├── test_chat_example.py # Test script for chat
+│   ├── pinecone_example.py # Pinecone integration demo
+│   ├── hybrid_example.py # Backend comparison demo
 │   └── sample_conversation.json # Sample data
+├── config/               # Configuration examples
+│   └── pinecone.yaml    # Pinecone configuration
 ├── pyproject.toml        # Project configuration
 └── README.md            # Documentation
 ```
@@ -224,6 +324,58 @@ cortex/
 - faiss-cpu>=1.7.4
 - sentence-transformers>=2.2.2
 - numpy>=1.24.0
+
+### Optional Dependencies
+
+For cloud vector databases:
+
+```bash
+# Pinecone support
+pip install cortex-memory[pinecone]
+
+# All optional dependencies
+pip install cortex-memory[chat,pinecone]
+```
+
+## Migration & Best Practices
+
+### From Local to Cloud
+
+Start with local storage and migrate to cloud when needed:
+
+```python
+# Development: Local FAISS
+memory = ConversationMemory()
+
+# Production: Pinecone
+memory = ConversationMemory(
+    vector_backend="pinecone",
+    index_name="production-vectors"
+)
+```
+
+### Environment-Based Configuration
+
+```python
+import os
+
+# Auto-select backend based on environment
+if os.getenv("CORTEX_VECTOR_BACKEND") == "pinecone":
+    memory = ConversationMemory(vector_backend="pinecone")
+else:
+    memory = ConversationMemory()  # Default to local
+```
+
+### Error Handling & Fallbacks
+
+```python
+try:
+    memory = ConversationMemory(vector_backend="pinecone")
+except Exception as e:
+    print(f"Cloud backend failed: {e}")
+    # Fallback to local
+    memory = ConversationMemory(vector_backend="faiss")
+```
 
 ## Contributing
 

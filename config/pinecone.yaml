@@ -1,0 +1,20 @@
+# Pinecone Configuration Example
+# Copy this file and update with your Pinecone credentials
+
+# Vector backend configuration
+vector_backend: "pinecone"
+
+# Pinecone-specific settings
+index_name: "cortex-vectors"
+dimension: 384
+metric: "cosine"
+
+# Optional: Advanced Pinecone settings
+# pod_type: "p1.x1"  # For paid plans
+# replicas: 1
+# metadata_config:
+#   indexed: ["user_id", "role", "conversation_id"]
+
+# Note: Set these environment variables:
+# export PINECONE_API_KEY="your-api-key-here"
+# export PINECONE_ENVIRONMENT="your-environment-here"
