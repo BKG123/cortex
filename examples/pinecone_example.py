@@ -8,7 +8,11 @@ for vector storage and similarity search.
 import os
 import uuid
 from datetime import datetime
+from dotenv import load_dotenv
 from memory.conversation import ConversationMemory, Message
+
+
+load_dotenv()
 
 
 def main():

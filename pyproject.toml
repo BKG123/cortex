@@ -27,6 +27,7 @@ dependencies = [
     "numpy>=1.24.0",
     "python-dotenv>=1.1.1",
     "openai>=1.102.0",
+    "pinecone>=7.3.0",
 ]
 
 [project.optional-dependencies]
